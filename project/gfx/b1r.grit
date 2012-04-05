@@ -1,0 +1,4 @@
+# 8 bit bitmap
+-gB8
+
+-gT 0x00FF00
