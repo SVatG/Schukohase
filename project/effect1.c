@@ -41,6 +41,20 @@ void effect1_init() {
 	arr_a = loadSpriteA( "nitro:/gfx/unicorn.img.bin" );
 	arr_b = arr_a;
 	arr_c = arr_a;
+
+	DISPCNT_B = DISPCNT_MODE_5 | DISPCNT_BG2_ON | DISPCNT_ON;
+	VRAMCNT_C = VRAMCNT_C_BG_VRAM_B;
+
+	BG2CNT_B = BGxCNT_EXTENDED_BITMAP_16 | BGxCNT_BITMAP_SIZE_256x256 | BGxCNT_OVERFLOW_WRAP | BGxCNT_SCREEN_BASE(0);
+	BG2CNT_B = (BG2CNT_B&~BGxCNT_PRIORITY_MASK)|BGxCNT_PRIORITY_0;
+	BG2PA_B = (1 << 8);
+	BG2PB_B = 0;
+	BG2PC_B = 0;
+	BG2PD_B = (1 << 8);
+	BG2X_B = 0;
+	BG2Y_B = 0;
+
+	loadImage( "nitro:/gfx/text.img.bin", VRAM_B_OFFS_0K,256*192*2);
 }
 
 int arra_m = 2;
@@ -75,17 +89,18 @@ void drawbars(int t) {
 	int arra_r = 0;
 	int arrb_r = 0;
 	int arrc_r = 0;
+	
 	for( int x = 0; x < 256; x++ ) {
-		if( x > arra_s && x < arra_s + 30 ) {
-			bg[x] = rainbowTable[(t+arra_r)%255] | BIT(15);
+		if( x > arra_s && x < arra_s + 10 ) {
+			bg[x] = 4 | 4<<5 | 4<<10 | BIT(15);
 			arra_r += 10;
 		}
-		else if( x > arrb_s && x < arrb_s + 20 ) {
-			bg[x] = rainbowTable[(t+50+arrb_r)%255] | BIT(15);
+		else if( x > arrb_s && x < arrb_s + 10 ) {
+			bg[x] = 4 | 4<<5 | 4<<10 | BIT(15);
 			arrb_r += 10;
 		}
-		else if( x > arrc_s - (isin(t<<4)>>7) && x < arrc_s + 20 - (isin(t<<4)>>7) ) {
-			bg[x] = rainbowTable[(t+100+arrc_r)%255] | BIT(15);
+		else if( x > arrc_s - (isin(t<<4)>>7) && x < arrc_s + 10 - (isin(t<<4)>>7) ) {
+			bg[x] = 4 | 4<<5 | 4<<10 | BIT(15);
 			arrc_r += 10;
 		} else {
 			bg[x] = ~BIT(15);
@@ -98,7 +113,7 @@ void drawbars(int t) {
 
 	oamSet(
 		&oamMain, 1,
-		arra_s*0.45-50, 130-arra_s*0.85,
+		arra_s*0.45-50, 130-arra_s*0.78,
 		1, 0,
 		SpriteSize_64x64,
 		SpriteColorFormat_256Color,
@@ -110,58 +125,37 @@ void drawbars(int t) {
 		&oamMain,
 		1,
 		0,
-		160,
-		160
+		255,
+		255
 	);
-	
+
 	oamSet(
 		&oamMain, 2,
-		arrb_s*0.3-30, 140-arrb_s*0.95-(icos((t+10)<<4))/200,
+		arrb_s*0.3-30, 159-arrb_s*0.95-(icos((t+10)<<4))/200,
 		1, 0,
 		SpriteSize_64x64,
 		SpriteColorFormat_256Color,
 		arr_a,
-		0, true, false, false, false, false
+		0, true, false, true, false, false
 	);
 
 	oamRotateScale(
 		&oamMain,
 		0,
 		-(icos((t+10)<<4)),
-		180,
-		180
+		255,
+		255
 	);
 	
 	oamSet(
 		&oamMain, 3,
-		-(isin(t<<4)>>9)*1.25+34, arrc_s*0.6+20+(isin(t<<4)>>7),
+		-(isin(t<<4)>>9)*1.25+34, arrc_s*0.6+30+(isin(t<<4)>>7),
 		0, 0,
 		SpriteSize_64x64,
 		SpriteColorFormat_256Color,
 		arr_a,
 		-1, false, false, false, false, false
 	);
-
-	// Rape train
-	for( int i = 0; i < 20; i++ ) {
-		float tt = t/20.0;
-		oamSet(
-			&oamMain,
-			30+i, i*20-32*4+(int)(tt*20.0)%(20*3), 147+sin(tt*2.0)*5.0+sin((i*20-32*4+(int)(tt*20.0)%(20*3))/20.0)*10.0, 0, 0,
-			SpriteSize_64x64,
-			SpriteColorFormat_256Color,
-			arr_a,
-			-10, false, false, true, false, false
-		);
-		oamSet(
-			&oamMain,
-			10+i, 256-i*20+32*4-(int)(tt*25.0)%(20*3), 155+cos(tt*2.3)*5.0+cos((256-i*20+32*4-(int)(tt*25.0)%(20*3))/20.0)*10.0, 0, 0,
-			SpriteSize_64x64,
-			SpriteColorFormat_256Color,
-			arr_a,
-			-10, false, false, false, false, false
-		);
-		}
 	
 	oamUpdate(&oamMain);
 }

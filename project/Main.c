@@ -36,12 +36,35 @@ extern int cubemode;
 extern int showmode;
 
 uint8_t ATTR_DTCM dtcm_buffer[12288];
+volatile int unts = 0;
+volatile int unts_proc = 0;
+
+uint32_t effect = 1;
+uint32_t last_effect = 1;
+mm_word myEventHandler( mm_word msg, mm_word param )
+{
+    switch( msg )
+    {
+	case MMCB_SONGMESSAGE:
+		if(param != 3) {
+			unts = param;
+			unts_proc = 0;
+		}
+		else {
+			effect++;
+		}
+	break;
+    }
+}
+
 
 void fadeout(int t, int b) {
 	uint16_t* master_bright = (uint16_t*)(0x400006C);
+	uint16_t* master_bright_sub = (u16*)(0x400106C);
 	if( t > b-16 ) {
 		uint16_t val = 18-(b-t);
 		memset( master_bright, (1<<7) | val, 2 );
+		memset( master_bright_sub, (1<<7) | val, 2 );		
 	}
 // 	else {
 // 		memset( master_bright, (1<<7) | 15, 2 );
@@ -60,6 +83,7 @@ void fadein(int t, int b) {
 }
 
 
+int32_t fadet = 0;
 int main()
 {
 	// Turn on everything.
@@ -75,8 +99,8 @@ int main()
 	tempImage = malloc(256*256*2);
 
 	#ifdef DEBUG
-	//consoleDemoInit();
-	//iprintf( "Debug mode.\n" );
+// 	consoleDemoInit();
+// 	iprintf( "Debug mode.\n" );
 	#endif
 
 	t = 0;
@@ -85,19 +109,74 @@ int main()
 //	memset(wram,0,128*96);
 
 	mmInitDefault( "nitro:/zik/music.bin" );
-	mmLoad( MOD_RAINBOWS_CLN );
-	mmStart( MOD_RAINBOWS_CLN, MM_PLAY_ONCE );
-
-	palflip_init();
+	mmLoad( MOD_MUSIC );
+	mmStart( MOD_MUSIC, MM_PLAY_ONCE );
+	mmSetEventHandler( myEventHandler );
 	
-	while( t<140*60 ) {
-		scanKeys();
+// 	palflip_init();
+	effect1_init();
+// 	effect6_init();
+// 	effect7_init();
+// 	effect5_init();
+// 	effect1_init();
 
-		if(1) {
-			palflip_update(t);
+// 	t = 1340;
+	while( 1 ) {
+		if(unts != 0 && unts_proc == 1) {
+			unts = 0;
+		}
+		if(0) {
+// 			effect7_update(t);
+// 			effect6_update(t);
+// 			effect1_update(t);
+// 			palflip_update(t);
 		}
 		else {
-
+			if(effect == 0) {
+				effect1_update(t);
+			}
+			if(effect == 1 && last_effect == 0) {
+				last_effect++;
+				effect1_destroy();
+				effect7_init();
+			}
+			if(effect == 1) {
+				effect7_update(t);
+			}
+			if(effect == 2 && last_effect == 1) {
+				last_effect++;				
+				effect7_destroy();
+				effect5_init();
+			}
+			if(effect == 2) {
+				effect5_update(t);
+			}
+			if(effect == 3 && last_effect == 2) {
+				last_effect++;				
+				effect5_destroy();
+				effect6_init();
+			}
+			if(effect == 3) {
+				effect6_update(t);
+			}
+			if(effect == 4 && last_effect == 3) {
+				last_effect++;		
+				effect6_destroy();
+				palflip_init();
+			}
+			if(effect == 4) {
+				palflip_update(t);
+			}
+			if(effect == 5 && last_effect == 4) {
+				last_effect++;
+				fadet = t;
+			}
+			if(fadet > 0 && t <= fadet + 16) {
+				fadeout(t,fadet + 16);
+			}
+			if(effect == 6 && t > fadet + 16 ) {
+				swiWaitForVBlank();
+			}
 		}
  		swiWaitForVBlank();
 	}

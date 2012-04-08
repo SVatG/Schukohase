@@ -1,10 +1,10 @@
 # Binary name.
-NAME = rainbows
+NAME = SCHUKOHASE
 
 # Object files, for the ARM9 binary and the ARM7 binary
 OBJS = Main.o ARM.o nitrofs.o Loader.o RainbowTable.o DS3D/DS3D.o DS3D/Utils.o \
        DS3D/Vector/VectorFixed.o DS3D/Vector/MatrixFixed.o DS3D/Vector/QuaternionFixed.o \
-       palflip.o
+       palflip.o effect1.o effect6.o VoxelBlock.o effect7.o effect5.o
 
 
 OBJS7 = Main.arm7.o
@@ -19,7 +19,9 @@ LIBS7 = -L$(DEVKITPRO)/libnds/lib -lnds7 -lmm7
 # nitrofs under /gfx.
 # This needs work so that the images are not remade every time the binary is
 # compiled.
-BITMAPS=gfx/allstars.bin
+BITMAPS=gfx/allstars.bin gfx/clouds.bin gfx/unicorn.bin gfx/arschgeige_3.bin \
+ gfx/kalt.bin gfx/hasea.bin gfx/haseb.bin gfx/hasea.bin  gfx/haseb.bin gfx/up.bin  gfx/up2.bin \
+ gfx/aocubes.bin gfx/text.bin
 
 # Compiler setup
 CC = $(DEVKITARM)/bin/arm-eabi-gcc
@@ -95,7 +97,7 @@ install: $(NAME).nds
 todisk: $(NAME).nds
 	/bin/rm -rf disk
 	/bin/mkdir disk
-	/usr/bin/sudo mount /dev/sdb1 disk
+	/usr/bin/sudo mount /dev/sdb disk
 	/usr/bin/sudo cp $(NAME).nds disk/
 	/bin/sleep 1
 	/usr/bin/sudo umount disk
