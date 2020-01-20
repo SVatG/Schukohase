@@ -1,0 +1,369 @@
+#include "Truchet.h"
+#include "DS3D/DS3D.h"
+#include "DS3D/Vector/QuaternionFixed.h"
+
+static void DrawWorld(mat4x3_t cam);
+static void DrawTile(int numsegments,int16_t arc[numsegments][3][2],int thickness);
+static void DrawMirrorTile(int numsegments,int16_t arc[numsegments][3][2],int thickness);
+static uint32_t Hash32(uint32_t val);
+
+#define NumberOfSegments 5
+
+static int16_t arc[NumberOfSegments][3][2];
+static int thickness;
+static int t;
+
+static quat_t rot;
+static vec3_t pos;
+
+void InitTruchet()
+{
+	DISPCNT_A=DISPCNT_MODE_0|DISPCNT_ON|DISPCNT_3D|DISPCNT_BG0_ON;
+
+	DSInit3D();
+	DSViewport(0,0,255,191);
+
+	DSSetControl(DS_TEXTURING|DS_ANTIALIAS|DS_FOG);
+	DSClearParams(26,26,26,31,63);
+
+	DSMatrixMode(DS_PROJECTION);
+	DSLoadIdentity();
+	DSPerspective(65,256.0/192.0,0.1,4);
+
+	DSSetFogLinearf(26,26,26,31,2,4,0.1,4);
+
+	thickness=DSf32(0.2);
+	t=0;
+
+	int r1=DSf32(1)-thickness;
+	int r2=DSf32(1)+thickness;
+
+	for(int i=0;i<NumberOfSegments;i++)
+	{
+		int a=(i*1024)/(NumberOfSegments-1);
+		arc[i][0][0]=imul(r1,icos(a));
+		arc[i][0][1]=imul(r1,isin(a));
+		arc[i][1][0]=imul(r2,icos(a));
+		arc[i][1][1]=imul(r2,isin(a));
+		arc[i][2][0]=DSf32ton10(icos(a));
+		arc[i][2][1]=DSf32ton10(isin(a));
+	}
+	arc[0][0][1]-=F(0.01);
+	arc[0][1][1]-=F(0.01);
+	arc[NumberOfSegments-1][0][0]-=F(0.01);
+	arc[NumberOfSegments-1][1][0]-=F(0.01);
+
+	rot=quatone;
+	pos=vec3zero;
+}
+
+void Truchet()
+{
+	rot=quatmul(rot,quatrotation(-40,vec3(F(1),0,0)));
+	rot=quatmul(rot,quatrotation(40,vec3(0,F(1),0)));
+	rot=quatnorm(rot);
+	mat3x3_t m=mat3x3quat(rot);
+
+//	pos=vec3add(pos,vec3mul(mat3x3_z(m),-F(0.1)));
+pos=vec3(Random()%F(1),Random()%F(1),Random()%F(1));
+iprintf("%x\n",pos.x);
+
+	DrawWorld(mat4x3vec3(mat3x3_x(m),mat3x3_y(m),mat3x3_z(m),pos));
+
+	DSSwapBuffers(0);
+}
+
+static void DrawWorld(mat4x3_t cam)
+{
+	DSMatrixMode(DS_POSITION_AND_VECTOR);
+	DSLoadMatrix4x3(mat4x3affineinverse(cam));
+
+	DSLight3f(0,0x7fff,1,-1,-1);
+	DSMaterialDiffuseAndAmbient(0x3def,0x3def);
+
+	vec3_t pos=mat4x3_w(cam);
+	int x0=FixedToInt(pos.x);
+	int y0=FixedToInt(pos.y);
+	int z0=FixedToInt(pos.z);
+
+	for(int z=z0-4;z<=z0+4;z++)
+	for(int y=y0-4;y<=y0+4;y++)
+	for(int x=x0-4;x<=x0+4;x++)
+	{
+		DSPushMatrix();
+		DSTranslatef(x+0.5,y+0.5,z+0.5);
+		DSScalef(0.5,0.5,0.5);
+
+		DSPolygonAttributes(DS_POLY_MODE_MODULATION|DS_POLY_CULL_BACK|DS_POLY_LIGHT0|DS_POLY_FOG|DS_POLY_ALPHA(31));
+
+		int type=Hash32(Hash32(Hash32(x)^y)^z)&7;
+
+		DSRotateZi((type&3)*1024);
+
+		if(type&4) DrawTile(NumberOfSegments,arc,thickness);
+		else DrawMirrorTile(NumberOfSegments,arc,thickness);
+
+		DSPopMatrix(1);
+	}
+	t++;
+}
+
+static void DrawMirrorTile(int numsegments,int16_t arc[numsegments][3][2],int thickness)
+{
+	int one=DSf32(1);
+
+
+	// XY
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(0,0,1);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(one-arc[i][0][0],one-arc[i][0][1],thickness);
+		DSVertex3v16(one-arc[i][1][0],one-arc[i][1][1],thickness);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(0,0,-1);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(one-arc[i][1][0],one-arc[i][1][1],-thickness);
+		DSVertex3v16(one-arc[i][0][0],one-arc[i][0][1],-thickness);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(-arc[i][2][0],-arc[i][2][1],0);
+		DSVertex3v16(one-arc[i][1][0],one-arc[i][1][1],thickness);
+		DSVertex3v16(one-arc[i][1][0],one-arc[i][1][1],-thickness);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(arc[i][2][0],arc[i][2][1],0);
+		DSVertex3v16(one-arc[i][0][0],one-arc[i][0][1],-thickness);
+		DSVertex3v16(one-arc[i][0][0],one-arc[i][0][1],thickness);
+	}
+	DSEnd();
+
+
+
+	// XZ
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(0,1,0);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(arc[i][1][0]-one,thickness,arc[i][1][1]-one);
+		DSVertex3v16(arc[i][0][0]-one,thickness,arc[i][0][1]-one);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(0,-1,0);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(arc[i][0][0]-one,-thickness,arc[i][0][1]-one);
+		DSVertex3v16(arc[i][1][0]-one,-thickness,arc[i][1][1]-one);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(arc[i][2][0],0,arc[i][2][1]);
+		DSVertex3v16(arc[i][1][0]-one,-thickness,arc[i][1][1]-one);
+		DSVertex3v16(arc[i][1][0]-one,thickness,arc[i][1][1]-one);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(-arc[i][2][0],0,-arc[i][2][1]);
+		DSVertex3v16(arc[i][0][0]-one,thickness,arc[i][0][1]-one);
+		DSVertex3v16(arc[i][0][0]-one,-thickness,arc[i][0][1]-one);
+	}
+	DSEnd();
+
+
+
+	// YZ
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(1,0,0);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(thickness,arc[i][1][0]-one,one-arc[i][1][1]);
+		DSVertex3v16(thickness,arc[i][0][0]-one,one-arc[i][0][1]);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(-1,0,0);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(-thickness,arc[i][0][0]-one,one-arc[i][0][1]);
+		DSVertex3v16(-thickness,arc[i][1][0]-one,one-arc[i][1][1]);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(0,arc[i][2][0],-arc[i][2][1]);
+		DSVertex3v16(-thickness,arc[i][1][0]-one,one-arc[i][1][1]);
+		DSVertex3v16(thickness,arc[i][1][0]-one,one-arc[i][1][1]);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(0,-arc[i][2][0],arc[i][2][1]);
+		DSVertex3v16(thickness,arc[i][0][0]-one,one-arc[i][0][1]);
+		DSVertex3v16(-thickness,arc[i][0][0]-one,one-arc[i][0][1]);
+	}
+	DSEnd();
+}
+
+static void DrawTile(int numsegments,int16_t arc[numsegments][3][2],int thickness)
+{
+	int one=DSf32(1);
+
+
+	// XY
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(0,0,1);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(arc[i][1][0]-one,one-arc[i][1][1],thickness);
+		DSVertex3v16(arc[i][0][0]-one,one-arc[i][0][1],thickness);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(0,0,-1);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(arc[i][0][0]-one,one-arc[i][0][1],-thickness);
+		DSVertex3v16(arc[i][1][0]-one,one-arc[i][1][1],-thickness);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(arc[i][2][0],-arc[i][2][1],0);
+		DSVertex3v16(arc[i][1][0]-one,one-arc[i][1][1],-thickness);
+		DSVertex3v16(arc[i][1][0]-one,one-arc[i][1][1],thickness);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(-arc[i][2][0],arc[i][2][1],0);
+		DSVertex3v16(arc[i][0][0]-one,one-arc[i][0][1],thickness);
+		DSVertex3v16(arc[i][0][0]-one,one-arc[i][0][1],-thickness);
+	}
+	DSEnd();
+
+
+
+	// XZ
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(0,1,0);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(one-arc[i][0][0],thickness,arc[i][0][1]-one);
+		DSVertex3v16(one-arc[i][1][0],thickness,arc[i][1][1]-one);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(0,-1,0);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(one-arc[i][1][0],-thickness,arc[i][1][1]-one);
+		DSVertex3v16(one-arc[i][0][0],-thickness,arc[i][0][1]-one);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(-arc[i][2][0],0,arc[i][2][1]);
+		DSVertex3v16(one-arc[i][1][0],thickness,arc[i][1][1]-one);
+		DSVertex3v16(one-arc[i][1][0],-thickness,arc[i][1][1]-one);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(arc[i][2][0],0,-arc[i][2][1]);
+		DSVertex3v16(one-arc[i][0][0],-thickness,arc[i][0][1]-one);
+		DSVertex3v16(one-arc[i][0][0],thickness,arc[i][0][1]-one);
+	}
+	DSEnd();
+
+
+
+	// YZ
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(1,0,0);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(thickness,arc[i][1][0]-one,one-arc[i][1][1]);
+		DSVertex3v16(thickness,arc[i][0][0]-one,one-arc[i][0][1]);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	DSNormal3f(-1,0,0);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSVertex3v16(-thickness,arc[i][0][0]-one,one-arc[i][0][1]);
+		DSVertex3v16(-thickness,arc[i][1][0]-one,one-arc[i][1][1]);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(0,arc[i][2][0],-arc[i][2][1]);
+		DSVertex3v16(-thickness,arc[i][1][0]-one,one-arc[i][1][1]);
+		DSVertex3v16(thickness,arc[i][1][0]-one,one-arc[i][1][1]);
+	}
+	DSEnd();
+
+	DSBegin(DS_QUAD_STRIP);
+	for(int i=0;i<numsegments;i++)
+	{
+		DSNormal3n10(0,-arc[i][2][0],arc[i][2][1]);
+		DSVertex3v16(thickness,arc[i][0][0]-one,one-arc[i][0][1]);
+		DSVertex3v16(-thickness,arc[i][0][0]-one,one-arc[i][0][1]);
+	}
+	DSEnd();
+}
+
+static uint32_t Hash32(uint32_t val)
+{
+	val^=val>>16;
+	val^=61;
+	val+=val<<3;
+	val^=val>>4;
+	val*=0x27d4eb2d;
+	val^=val>>15;
+	return val;
+}
+
